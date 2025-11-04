@@ -3,6 +3,7 @@ import uuid
 from pydantic import EmailStr
 from sqlmodel import Field, Relationship, SQLModel
 
+Base = SQLModel
 
 # Shared properties
 class UserBase(SQLModel):
