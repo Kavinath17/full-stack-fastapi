@@ -1,0 +1,53 @@
+# General
+**/__pycache__/
+**/.pytest_cache/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.env
+.env
+.DS_Store
+.idea
+.vscode
+*.sqlite3
+*.db
+
+# Git
+.git
+.gitignore
+
+# Python build artifacts
+*.egg-info
+build/
+dist/
+.eggs/
+.mypy_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Node / Frontend
+frontend/node_modules
+frontend/.env
+frontend/dist
+frontend/build
+npm-debug.log
+yarn-error.log
+
+# Virtual environments
+.venv
+venv/
+env/
+ENV/
+
+# OS / Editor junk
+Thumbs.db
+*.swp
+*.swo
+*.bak
+*.tmp
+
+# Docker itself
+Dockerfile
+docker-compose.yml
