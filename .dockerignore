@@ -1,23 +1,24 @@
-# General
+# ===== General =====
 **/__pycache__/
 **/.pytest_cache/
 *.pyc
 *.pyo
 *.pyd
 *.log
-*.env
-.env
 .DS_Store
 .idea
 .vscode
 *.sqlite3
 *.db
+*.tmp
+*.bak
+Thumbs.db
 
-# Git
+# ===== Git =====
 .git
 .gitignore
 
-# Python build artifacts
+# ===== Python =====
 *.egg-info
 build/
 dist/
@@ -27,7 +28,7 @@ dist/
 htmlcov/
 .tox/
 
-# Node / Frontend
+# ===== Node / Frontend =====
 frontend/node_modules
 frontend/.env
 frontend/dist
@@ -35,19 +36,12 @@ frontend/build
 npm-debug.log
 yarn-error.log
 
-# Virtual environments
-.venv
+# ===== Virtual Environments =====
+.venv/
 venv/
 env/
 ENV/
 
-# OS / Editor junk
-Thumbs.db
-*.swp
-*.swo
-*.bak
-*.tmp
-
-# Docker itself
-Dockerfile
+# ===== Docker =====
 docker-compose.yml
+Dockerfile
