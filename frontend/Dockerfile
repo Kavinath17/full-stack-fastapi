@@ -1,16 +1,11 @@
-# Step 1: Build stage
-FROM node:20-alpine AS build
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-
-# Increase Node memory for build
-ENV NODE_OPTIONS="--max-old-space-size=4096"
-RUN npm run build
-
-# Step 2: Serve stage
+# Serve prebuilt frontend with Nginx
 FROM nginx:alpine
-COPY --from=build /app/dist /usr/share/nginx/html
+
+# Copy the prebuilt frontend from your local machine
+COPY dist /usr/share/nginx/html
+
+# Expose HTTP port
 EXPOSE 80
+
+# Start Nginx in the foreground
 CMD ["nginx", "-g", "daemon off;"]
