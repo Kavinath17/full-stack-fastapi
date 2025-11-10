@@ -2,7 +2,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import col, delete, func, select
+from sqlmodel import col, delete, func, select, Session
 
 from app import crud
 from app.api.deps import (
@@ -28,6 +28,9 @@ from app.utils import generate_new_account_email, send_email
 
 router = APIRouter(prefix="/users", tags=["users"])
 
+# ------------------------------
+# Admin-only routes
+# ------------------------------
 
 @router.get(
     "/",
@@ -36,15 +39,10 @@ router = APIRouter(prefix="/users", tags=["users"])
 )
 def read_users(session: SessionDep, skip: int = 0, limit: int = 100) -> Any:
     """
-    Retrieve users.
+    Retrieve all users (admin only).
     """
-
-    count_statement = select(func.count()).select_from(User)
-    count = session.exec(count_statement).one()
-
-    statement = select(User).offset(skip).limit(limit)
-    users = session.exec(statement).all()
-
+    count = session.exec(select(func.count()).select_from(User)).one()
+    users = session.exec(select(User).offset(skip).limit(limit)).all()
     return UsersPublic(data=users, count=count)
 
 
@@ -53,7 +51,7 @@ def read_users(session: SessionDep, skip: int = 0, limit: int = 100) -> Any:
 )
 def create_user(*, session: SessionDep, user_in: UserCreate) -> Any:
     """
-    Create new user.
+    Create a new user (admin only).
     """
     user = crud.get_user_by_email(session=session, email=user_in.email)
     if user:
@@ -62,7 +60,12 @@ def create_user(*, session: SessionDep, user_in: UserCreate) -> Any:
             detail="The user with this email already exists in the system.",
         )
 
+    # Hash password before storing
+    if user_in.password:
+        user_in.hashed_password = get_password_hash(user_in.password)
+
     user = crud.create_user(session=session, user_create=user_in)
+
     if settings.emails_enabled and user_in.email:
         email_data = generate_new_account_email(
             email_to=user_in.email, username=user_in.email, password=user_in.password
@@ -75,20 +78,32 @@ def create_user(*, session: SessionDep, user_in: UserCreate) -> Any:
     return user
 
 
+# ------------------------------
+# User self-management routes
+# ------------------------------
+
+@router.get("/me", response_model=UserPublic)
+def read_user_me(current_user: CurrentUser) -> Any:
+    """
+    Get current logged-in user.
+    """
+    return current_user
+
+
 @router.patch("/me", response_model=UserPublic)
 def update_user_me(
     *, session: SessionDep, user_in: UserUpdateMe, current_user: CurrentUser
 ) -> Any:
     """
-    Update own user.
+    Update own user info.
     """
-
     if user_in.email:
         existing_user = crud.get_user_by_email(session=session, email=user_in.email)
         if existing_user and existing_user.id != current_user.id:
             raise HTTPException(
                 status_code=409, detail="User with this email already exists"
             )
+
     user_data = user_in.model_dump(exclude_unset=True)
     current_user.sqlmodel_update(user_data)
     session.add(current_user)
@@ -110,19 +125,11 @@ def update_password_me(
         raise HTTPException(
             status_code=400, detail="New password cannot be the same as the current one"
         )
-    hashed_password = get_password_hash(body.new_password)
-    current_user.hashed_password = hashed_password
+
+    current_user.hashed_password = get_password_hash(body.new_password)
     session.add(current_user)
     session.commit()
     return Message(message="Password updated successfully")
-
-
-@router.get("/me", response_model=UserPublic)
-def read_user_me(current_user: CurrentUser) -> Any:
-    """
-    Get current user.
-    """
-    return current_user
 
 
 @router.delete("/me", response_model=Message)
@@ -139,10 +146,14 @@ def delete_user_me(session: SessionDep, current_user: CurrentUser) -> Any:
     return Message(message="User deleted successfully")
 
 
+# ------------------------------
+# Public signup
+# ------------------------------
+
 @router.post("/signup", response_model=UserPublic)
 def register_user(session: SessionDep, user_in: UserRegister) -> Any:
     """
-    Create new user without the need to be logged in.
+    Public signup: create a new user without authentication.
     """
     user = crud.get_user_by_email(session=session, email=user_in.email)
     if user:
@@ -150,10 +161,19 @@ def register_user(session: SessionDep, user_in: UserRegister) -> Any:
             status_code=400,
             detail="The user with this email already exists in the system",
         )
+
+    # Convert input and hash password
     user_create = UserCreate.model_validate(user_in)
+    user_create.hashed_password = get_password_hash(user_in.password)
+
+    # Create user in DB
     user = crud.create_user(session=session, user_create=user_create)
     return user
 
+
+# ------------------------------
+# Read/update/delete by ID (admin)
+# ------------------------------
 
 @router.get("/{user_id}", response_model=UserPublic)
 def read_user_by_id(
@@ -166,10 +186,7 @@ def read_user_by_id(
     if user == current_user:
         return user
     if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=403,
-            detail="The user doesn't have enough privileges",
-        )
+        raise HTTPException(status_code=403, detail="Insufficient privileges")
     return user
 
 
@@ -179,21 +196,18 @@ def read_user_by_id(
     response_model=UserPublic,
 )
 def update_user(
-    *,
-    session: SessionDep,
-    user_id: uuid.UUID,
-    user_in: UserUpdate,
+    *, session: SessionDep, user_id: uuid.UUID, user_in: UserUpdate
 ) -> Any:
     """
-    Update a user.
+    Update a user (admin only).
     """
-
     db_user = session.get(User, user_id)
     if not db_user:
         raise HTTPException(
             status_code=404,
             detail="The user with this id does not exist in the system",
         )
+
     if user_in.email:
         existing_user = crud.get_user_by_email(session=session, email=user_in.email)
         if existing_user and existing_user.id != user_id:
@@ -210,7 +224,7 @@ def delete_user(
     session: SessionDep, current_user: CurrentUser, user_id: uuid.UUID
 ) -> Message:
     """
-    Delete a user.
+    Delete a user (admin only).
     """
     user = session.get(User, user_id)
     if not user:
@@ -219,8 +233,9 @@ def delete_user(
         raise HTTPException(
             status_code=403, detail="Super users are not allowed to delete themselves"
         )
-    statement = delete(Item).where(col(Item.owner_id) == user_id)
-    session.exec(statement)  # type: ignore
+
+    # Delete items owned by user
+    session.exec(delete(Item).where(col(Item.owner_id) == user_id))  # type: ignore
     session.delete(user)
     session.commit()
     return Message(message="User deleted successfully")

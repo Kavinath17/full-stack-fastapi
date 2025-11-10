@@ -1,21 +1,23 @@
-# Use official Python image
+# Step 1: Use Python base image
 FROM python:3.11-slim
 
-# Set working directory
+# Step 2: Set working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y libpq-dev gcc && rm -rf /var/lib/apt/lists/*
+# Step 3: Install git (needed for pip install from GitHub)
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
-# Copy dependencies file and install packages
-COPY pyproject.toml poetry.lock* /app/
-RUN pip install poetry && poetry install --no-root
+# Step 4: Copy dependency files
+COPY requirements.txt .
 
-# Copy application code
-COPY . /app
+# Step 5: Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose FastAPI port
+# Step 6: Copy project files
+COPY . .
+
+# Step 7: Expose FastAPI port
 EXPOSE 8000
 
-# Command to run app
-CMD ["poetry", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Step 8: Run FastAPI app with Uvicorn
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
